@@ -144,6 +144,7 @@ class _CredentialsFormScreenState extends State<CredentialsFormScreen> {
 
         if (!mounted) return;
         setState(() => _isMigrating = true);
+        debugPrint('[Setup] runMigrations çağrılıyor...');
 
         // ÖNEMLİ: `accessToken` sadece bu çağrı boyunca bellekte tutulur.
         // `ManagementApiService` onu HİÇBİR YERE kaydetmez; işlem bitince
@@ -154,6 +155,7 @@ class _CredentialsFormScreenState extends State<CredentialsFormScreen> {
           projectRef: projectRef,
           personalAccessToken: accessToken,
         );
+        debugPrint('[Setup] runMigrations tamamlandı.');
       }
     } on CredentialsValidationException catch (e) {
       if (!mounted) return;
@@ -169,6 +171,19 @@ class _CredentialsFormScreenState extends State<CredentialsFormScreen> {
         _saving = false;
         _isMigrating = false;
         _errorTextKey = e.messageKey;
+      });
+      return;
+    } catch (e) {
+      // Güvenlik ağı: yukarıdaki iki tip dışında, öngörülmemiş herhangi bir
+      // hata (ör. ileride tekrar bir asset/platform API değişikliği) UI'ı
+      // sonsuza kadar "hazırlanıyor" durumunda bırakmasın; en azından genel
+      // bir hata mesajı gösterip kullanıcıyı serbest bırak.
+      debugPrint('[Setup] Beklenmedik hata: $e');
+      if (!mounted) return;
+      setState(() {
+        _saving = false;
+        _isMigrating = false;
+        _errorTextKey = 'setup_error_migration_failed';
       });
       return;
     }

@@ -1,7 +1,8 @@
 import 'dart:convert';
 
 import 'package:dio/dio.dart';
-import 'package:flutter/services.dart' show rootBundle;
+import 'package:flutter/foundation.dart' show debugPrint;
+import 'package:flutter/services.dart' show AssetManifest, rootBundle;
 
 /// [ManagementApiService.runMigrations] sırasında oluşan, kullanıcıya
 /// gösterilecek yerelleştirilmiş bir mesaj anahtarı taşıyan hata.
@@ -41,6 +42,12 @@ class ManagementApiService {
   static final Dio _dio = Dio(
     BaseOptions(
       connectTimeout: const Duration(seconds: 15),
+      // İstek gövdesinin (SQL sorgusunun) sunucuya yüklenmesi sırasında
+      // bağlantı yavaşlar/askıda kalırsa `connectTimeout` (yalnızca TCP+TLS
+      // el sıkışmasını kapsar) ve `receiveTimeout` (yalnızca gönderim
+      // TAMAMLANDIKTAN sonra yanıt beklemeyi kapsar) bunu YAKALAYAMAZ;
+      // istek süresiz askıda kalabilir. `sendTimeout` bu boşluğu kapatır.
+      sendTimeout: const Duration(seconds: 20),
       receiveTimeout: const Duration(seconds: 30),
       headers: const {'Content-Type': 'application/json'},
     ),
@@ -75,7 +82,9 @@ class ManagementApiService {
     required String projectRef,
     required String personalAccessToken,
   }) async {
+    debugPrint('[Migration] Başladı. projectRef=$projectRef');
     final migrationAssetPaths = await _listMigrationAssetPaths();
+    debugPrint('[Migration] ${migrationAssetPaths.length} dosya bulundu: $migrationAssetPaths');
     if (migrationAssetPaths.isEmpty) {
       // Uygulama paketine migration dosyaları gömülmemiş; bu bir
       // paketleme/derleme hatasıdır, sessizce atlanmamalı.
@@ -83,13 +92,33 @@ class ManagementApiService {
     }
 
     for (final assetPath in migrationAssetPaths) {
+      debugPrint('[Migration] Okunuyor: $assetPath');
       final sql = await rootBundle.loadString(assetPath);
+      debugPrint('[Migration] Gönderiliyor: $assetPath (${sql.length} karakter)');
+      final stopwatch = Stopwatch()..start();
+      // Tek bir isteğin `sendTimeout`/`receiveTimeout` dışında, öngörülmemiş
+      // bir sebeple (ör. bağlantı kurulduktan sonra platform seviyesinde
+      // askıda kalması) süresiz beklemesine karşı ek bir güvenlik ağı:
+      // hiçbir migration isteği 45 saniyeyi geçmesin, aksi halde kurulum
+      // ekranı sonsuza kadar "hazırlanıyor" durumunda kalmasın.
       await _runSql(
         projectRef: projectRef,
         personalAccessToken: personalAccessToken,
         sql: sql,
+      ).timeout(
+        const Duration(seconds: 45),
+        onTimeout: () {
+          debugPrint('[Migration] ZAMAN AŞIMI (45sn): $assetPath');
+          throw ManagementApiException(
+            'setup_error_migration_failed',
+            detail: 'Request timed out after 45s ($assetPath)',
+          );
+        },
       );
+      debugPrint('[Migration] Tamamlandı: $assetPath (${stopwatch.elapsedMilliseconds}ms)');
     }
+    debugPrint('[Migration] Tüm migration'
+        'lar tamamlandı.');
   }
 
   static Future<void> _runSql({
@@ -129,21 +158,23 @@ class ManagementApiService {
   /// klasördeki `.sql` dosyalarının asset yollarını bulur.
   ///
   /// Flutter, asset klasörlerini doğrudan listeleyen bir API sunmadığı
-  /// için, derleme sırasında otomatik üretilen `AssetManifest.json`
-  /// dosyası okunup içindeki tüm asset yolları arasından bu klasöre ait
-  /// olanlar (ve yalnızca `.sql` uzantılılar) süzülüyor.
+  /// için, güncel `AssetManifest` API'si kullanılarak (bkz.
+  /// https://docs.flutter.dev/release/breaking-changes/asset-manifest-dot-json)
+  /// derleme sırasında üretilen manifest okunup içindeki tüm asset
+  /// yolları arasından bu klasöre ait olanlar (ve yalnızca `.sql`
+  /// uzantılılar) süzülüyor. ESKİ `rootBundle.loadString('AssetManifest.json')`
+  /// yaklaşımı KULLANILMAMALI: güncel Flutter sürümlerinde bu dosya artık
+  /// üretilmiyor (yerine `AssetManifest.bin` var) ve çağrı
+  /// "Unable to load asset: AssetManifest.json" hatasıyla başarısız olur.
   static Future<List<String>> _listMigrationAssetPaths() async {
-    final manifestJson = await rootBundle.loadString('AssetManifest.json');
-    final manifestMap = json.decode(manifestJson) as Map<String, dynamic>;
-
-    final paths =
-        manifestMap.keys
-            .where(
-              (key) =>
-                  key.startsWith('supabase/migrations/') &&
-                  key.endsWith('.sql'),
-            )
-            .toList()
+    final assetManifest = await AssetManifest.loadFromAssetBundle(rootBundle);
+    final paths = assetManifest
+        .listAssets()
+        .where(
+          (key) =>
+              key.startsWith('supabase/migrations/') && key.endsWith('.sql'),
+        )
+        .toList()
           ..sort();
     return paths;
   }
