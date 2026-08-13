@@ -3,6 +3,10 @@
 Dizi ve film takip uygulaması. Flutter ile geliştirildi.
 A TV show and movie tracking app built with Flutter.
 
+<p align="center">
+  <a href="#türkçe">🇹🇷 Türkçe</a> &nbsp;|&nbsp; <a href="#english">🇬🇧 English</a>
+</p>
+
 ---
 
 ## 🇹🇷 Türkçe
@@ -26,6 +30,20 @@ gerek yoktur.
    hesap ayarlarından oluşturulur) istenir. Tablolar zaten kuruluysa
    (örn. başka bir cihazda daha önce kurulum yaptıysanız) bu token'a
    gerek yoktur, sadece URL + anon key yeterlidir.
+
+##### Önerilen Supabase API ayarları
+
+Proje ayarları → **Data API** bölümünde:
+
+| Ayar | Önerilen değer |
+|---|---|
+| Enable Data API | ✅ Açık |
+| Automatically expose new tables | ❌ Kapalı |
+| Enable automatic RLS | ✅ Açık |
+
+Bu ayarlar, ileride eklenecek yeni tabloların varsayılan olarak dışarıya
+kapalı ve Row Level Security ile korumalı başlamasını sağlar; erişim
+sadece migration dosyalarındaki `GRANT`/policy tanımlarıyla açılır.
 
 #### 2. TMDB
 
@@ -71,6 +89,20 @@ needed.
    automatically create the required database tables. If the tables already
    exist (e.g. you've already set this up on another device), you don't
    need the token — just the URL + anon key.
+
+##### Recommended Supabase API settings
+
+Under Project Settings → **Data API**:
+
+| Setting | Recommended value |
+|---|---|
+| Enable Data API | ✅ On |
+| Automatically expose new tables | ❌ Off |
+| Enable automatic RLS | ✅ On |
+
+These settings make sure any table you add later starts out closed to the
+public API and protected by Row Level Security by default; access is only
+granted explicitly via the `GRANT`/policy statements in the migration files.
 
 #### 2. TMDB
 
