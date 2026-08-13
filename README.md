@@ -4,6 +4,12 @@ Dizi ve film takip uygulaması. Flutter ile geliştirildi.
 A TV show and movie tracking app built with Flutter.
 
 <p align="center">
+  <a href="https://github.com/sametdurn/WatchChronos/releases">
+    <img src="https://img.shields.io/github/v/release/sametdurn/WatchChronos?label=Download&style=for-the-badge" alt="Download latest release">
+  </a>
+</p>
+
+<p align="center">
   <a href="#turkce">🇹🇷 Türkçe</a> &nbsp;|&nbsp; <a href="#english">🇬🇧 English</a>
 </p>
 
@@ -56,10 +62,11 @@ sadece migration dosyalarındaki `GRANT`/policy tanımlarıyla açılır.
 
 #### 3. Uygulama
 
-APK (Android) veya EXE (Windows) olarak dağıtılan hazır sürümü indirip
-doğrudan çalıştırabilirsiniz. Uygulama açıldığında gerekli bilgiler kayıtlı
-değilse otomatik olarak kurulum ekranını gösterir; yukarıdaki bilgileri
-orada girmeniz yeterlidir.
+APK (Android) veya EXE (Windows) olarak dağıtılan hazır sürümü
+[**Releases**](https://github.com/sametdurn/WatchChronos/releases)
+sayfasından indirip doğrudan çalıştırabilirsiniz. Uygulama açıldığında
+gerekli bilgiler kayıtlı değilse otomatik olarak kurulum ekranını
+gösterir; yukarıdaki bilgileri orada girmeniz yeterlidir.
 
 > Kaynak koddan kendiniz derlemek isterseniz:
 > ```bash
@@ -115,9 +122,11 @@ granted explicitly via the `GRANT`/policy statements in the migration files.
 
 #### 3. Running the app
 
-You can download and run the prebuilt APK (Android) or EXE (Windows)
-directly. On launch, if the required credentials aren't saved yet, the app
-automatically shows the setup screen — just enter the details above there.
+You can download the prebuilt APK (Android) or EXE (Windows) from the
+[**Releases**](https://github.com/sametdurn/WatchChronos/releases) page and
+run it directly. On launch, if the required credentials aren't saved yet,
+the app automatically shows the setup screen — just enter the details
+above there.
 
 > To build from source instead:
 > ```bash
