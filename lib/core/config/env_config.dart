@@ -69,4 +69,16 @@ class EnvConfig {
     }
     return value;
   }
+
+  /// Kayıtlı Supabase/TMDB bağlantı bilgilerini cihazdan tamamen siler.
+  /// Geliştirme/test sırasında "ilk kurulum" akışını tekrar görmek için
+  /// kullanılır (Ayarlar > Bağlantı Bilgilerini Sıfırla).
+  static Future<void> clear() async {
+    await _storage.delete(key: _keySupabaseUrl);
+    await _storage.delete(key: _keySupabaseAnonKey);
+    await _storage.delete(key: _keyTmdbApiKey);
+    _supabaseUrl = null;
+    _supabaseAnonKey = null;
+    _tmdbApiKey = null;
+  }
 }

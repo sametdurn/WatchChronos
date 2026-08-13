@@ -49,6 +49,16 @@ final Map<String, String> enTranslations = {
   'settings_qr_show_title': 'Transfer via QR',
   'settings_qr_show_subtitle':
       'Transfer connection details to another device via QR',
+  'settings_reset_connection_title': 'Reset Connection Info',
+  'settings_reset_connection_subtitle':
+      'Deletes Supabase and TMDB details from this device and returns to setup',
+  'settings_reset_connection_confirm_title': 'Delete connection info?',
+  'settings_reset_connection_confirm_message':
+      'The saved Supabase and TMDB connection details will be deleted from '
+      'this device and you\'ll be taken back to the setup screen. Your data '
+      'stays safe in Supabase — only the connection details on this device '
+      'are removed.',
+  'settings_reset_connection_confirm_action': 'Delete and Reset',
 
   // === setup / first-run mode selection ===
   'setup_mode_headline': 'How are you setting this up?',

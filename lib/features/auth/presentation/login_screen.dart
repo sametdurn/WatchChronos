@@ -3,8 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/router/app_routes.dart';
+import '../../../core/config/env_config.dart';
 import '../../../core/localization/app_localizations.dart';
 import '../../../core/localization/widgets/language_picker_button.dart';
+import '../../setup/presentation/setup_screen.dart';
 import 'controllers/auth_controller.dart';
 import 'utils/auth_error_translator.dart';
 
@@ -51,6 +53,33 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       ..showSnackBar(SnackBar(content: Text(message)));
   }
 
+  Future<void> _resetConnectionInfo() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(context.l10n.t('settings_reset_connection_confirm_title')),
+        content: Text(
+          context.l10n.t('settings_reset_connection_confirm_message'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: Text(context.l10n.t('common_cancel')),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: Text(context.l10n.t('settings_reset_connection_confirm_action')),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    await EnvConfig.clear();
+    if (!mounted) return;
+    runApp(const ProviderScope(child: SetupApp()));
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -60,6 +89,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
+        leading: IconButton(
+          onPressed: isLoading ? null : _resetConnectionInfo,
+          icon: Icon(
+            Icons.settings_backup_restore_rounded,
+            color: theme.colorScheme.error,
+          ),
+          tooltip: context.l10n.t('settings_reset_connection_title'),
+        ),
         actions: const [LanguagePickerButton()],
       ),
       body: SafeArea(

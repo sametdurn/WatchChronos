@@ -50,6 +50,15 @@ final Map<String, String> trTranslations = {
   'settings_qr_show_title': 'QR ile Aktar',
   'settings_qr_show_subtitle':
       'Bağlantı bilgilerini başka bir cihaza QR ile aktar',
+  'settings_reset_connection_title': 'Bağlantı Bilgilerini Sıfırla',
+  'settings_reset_connection_subtitle':
+      'Supabase ve TMDB bilgilerini cihazdan siler, kurulum ekranına döner',
+  'settings_reset_connection_confirm_title': 'Bağlantı bilgileri silinsin mi?',
+  'settings_reset_connection_confirm_message':
+      'Kayıtlı Supabase ve TMDB bağlantı bilgileri bu cihazdan silinecek ve '
+      'kurulum ekranına döneceksiniz. Verileriniz Supabase\'de saklı kalır, '
+      'sadece bu cihazdaki bağlantı bilgileri silinir.',
+  'settings_reset_connection_confirm_action': 'Sil ve Sıfırla',
 
   // === setup / kurulum modu seçimi ===
   'setup_mode_headline': 'Nasıl kuruyorsun?',

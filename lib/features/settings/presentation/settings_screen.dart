@@ -7,9 +7,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/router/app_routes.dart';
+import '../../../core/config/env_config.dart';
 import '../../../core/localization/app_locale.dart';
 import '../../../core/localization/app_localizations.dart';
 import '../../../core/localization/locale_controller.dart';
+import '../../../features/setup/presentation/setup_screen.dart';
 import '../../auth/presentation/utils/sign_out_confirmation.dart';
 import '../../setup/presentation/qr_credentials_screen.dart';
 import '../data/export_service.dart';
@@ -27,6 +29,36 @@ class SettingsScreen extends ConsumerStatefulWidget {
 
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   bool _isExporting = false;
+
+  Future<void> _resetConnectionInfo() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(context.l10n.t('settings_reset_connection_confirm_title')),
+        content: Text(
+          context.l10n.t('settings_reset_connection_confirm_message'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: Text(context.l10n.t('common_cancel')),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: Text(context.l10n.t('settings_reset_connection_confirm_action')),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    await EnvConfig.clear();
+    if (!mounted) return;
+    // Uygulama ağacını tamamen kurulum ekranıyla değiştiriyoruz; main()'de
+    // yapılan EnvConfig.isConfigured() kontrolüyle aynı sonucu üretir,
+    // ekstra bir "restart" adımına gerek kalmaz.
+    runApp(const ProviderScope(child: SetupApp()));
+  }
 
   Future<void> _exportData() async {
     if (_isExporting) return;
@@ -170,6 +202,18 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             onTap: () => Navigator.of(context).push(
               MaterialPageRoute(builder: (_) => const QrCredentialsScreen()),
             ),
+          ),
+          ListTile(
+            leading: Icon(
+              Icons.delete_forever_rounded,
+              color: Theme.of(context).colorScheme.error,
+            ),
+            title: Text(
+              context.l10n.t('settings_reset_connection_title'),
+              style: TextStyle(color: Theme.of(context).colorScheme.error),
+            ),
+            subtitle: Text(context.l10n.t('settings_reset_connection_subtitle')),
+            onTap: _resetConnectionInfo,
           ),
           _SectionHeader(context.l10n.t('settings_section_account')),
           ListTile(
