@@ -4,11 +4,12 @@ Dizi ve film takip uygulaması. Flutter ile geliştirildi.
 A TV show and movie tracking app built with Flutter.
 
 <p align="center">
-  <a href="#türkçe">🇹🇷 Türkçe</a> &nbsp;|&nbsp; <a href="#english">🇬🇧 English</a>
+  <a href="#turkce">🇹🇷 Türkçe</a> &nbsp;|&nbsp; <a href="#english">🇬🇧 English</a>
 </p>
 
 ---
 
+<a id="turkce"></a>
 ## 🇹🇷 Türkçe
 
 ### Kurulum
@@ -68,6 +69,7 @@ orada girmeniz yeterlidir.
 
 ---
 
+<a id="english"></a>
 ## 🇬🇧 English
 
 ### Setup
