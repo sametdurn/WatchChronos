@@ -81,6 +81,11 @@ dev_dependencies:
   isar_community_generator:
     version: *isar_version
 
+  # Uygulama ikonunu tüm platform boyutlarında otomatik üretmek için.
+  # Kullanımı: assets/icon/icon.png dosyasını koyup
+  # `dart run flutter_launcher_icons` çalıştırın.
+  flutter_launcher_icons: ^0.14.4
+
 flutter:
   uses-material-design: true
 
@@ -89,4 +94,14 @@ flutter:
   # projesine uygulanır (bkz. features/setup/data/management_api_service.dart).
   assets:
     - supabase/migrations/
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "assets/icon/icon.png"
+  min_sdk_android: 21
+  windows:
+    generate: true
+  macos:
+    generate: true
 

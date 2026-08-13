@@ -1,4 +1,4 @@
-package com.example.watchchronos
+package com.samet.watchchronos
 
 import io.flutter.embedding.android.FlutterActivity
 
