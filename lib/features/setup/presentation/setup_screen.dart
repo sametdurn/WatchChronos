@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart'
+    show TargetPlatform, defaultTargetPlatform, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -112,6 +114,18 @@ class _CredentialsFormScreenState extends State<CredentialsFormScreen> {
 
   bool get _runMigrations =>
       widget.isInitialSetup && _setupMode == SetupMode.firstTime;
+
+  /// `mobile_scanner` paketi yalnızca Android, iOS, macOS ve Web'i
+  /// destekliyor (Windows/Linux desteği yok, planlanmış da değil).
+  /// Bu yüzden QR tara butonu desteklenmeyen masaüstü platformlarında
+  /// hiç gösterilmiyor. `dart:io Platform` yerine `defaultTargetPlatform`
+  /// kullanılıyor çünkü proje Web'i de hedefliyor ve `dart:io` Web
+  /// derlemesinde derleme hatasına yol açar.
+  bool get _qrScanSupported =>
+      kIsWeb ||
+      defaultTargetPlatform == TargetPlatform.android ||
+      defaultTargetPlatform == TargetPlatform.iOS ||
+      defaultTargetPlatform == TargetPlatform.macOS;
 
   Future<void> _submit() async {
     if (!(_formKey.currentState?.validate() ?? false)) return;
@@ -296,12 +310,23 @@ class _CredentialsFormScreenState extends State<CredentialsFormScreen> {
                       ),
                       const SizedBox(height: 32),
                     ],
-                    OutlinedButton.icon(
-                      onPressed: _saving ? null : _scanQr,
-                      icon: const Icon(Icons.qr_code_scanner_rounded),
-                      label: Text(context.l10n.t('qr_scan_button')),
-                    ),
-                    const SizedBox(height: 16),
+                    // QR ile tarama, başka bir cihazda zaten kurulu bir
+                    // bağlantıyı kopyalamak içindir; "İlk defa kuruyorum"
+                    // akışında taranacak bir QR henüz mevcut olmadığından
+                    // bu buton yalnızca "existingDevice" akışında (veya
+                    // ayarlar ekranından düzenlerken) gösterilir. Ayrıca
+                    // `mobile_scanner` Windows/Linux'u desteklemediğinden
+                    // (bkz. `_qrScanSupported`) o platformlarda hiç
+                    // gösterilmez.
+                    if (_setupMode != SetupMode.firstTime &&
+                        _qrScanSupported) ...[
+                      OutlinedButton.icon(
+                        onPressed: _saving ? null : _scanQr,
+                        icon: const Icon(Icons.qr_code_scanner_rounded),
+                        label: Text(context.l10n.t('qr_scan_button')),
+                      ),
+                      const SizedBox(height: 16),
+                    ],
                     TextFormField(
                       controller: _supabaseUrlController,
                       decoration: const InputDecoration(
