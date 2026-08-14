@@ -206,10 +206,13 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen> {
     await _setStatus(nextStatus);
   }
 
-  /// Kütüphaneden kaldırır. Kayıt SİLİNMEZ (izlenen bölüm geçmişi/puan
-  /// korunur), sadece kütüphane listelerinden çıkar; bu yüzden burada
-  /// `_entry`'yi `null` yapmıyoruz, olduğu gibi (artık `inLibrary: false`)
-  /// yeniden çekiyoruz ki "Bölümleri Yönet" ile geçmiş hâlâ görülebilsin.
+  /// Kütüphaneden kaldırır. Film ise, ya da dizi olup en az bir bölüm
+  /// izlenmişse kayıt SİLİNMEZ (izlenen bölüm geçmişi/puan korunur), sadece
+  /// kütüphane listelerinden çıkar. Hiç bölümü izlenmemiş bir dizi ise kayıt
+  /// veritabanından tamamen silinir (bkz.
+  /// `WatchEntriesRepository.removeFromLibrary`) — bu durumda aşağıdaki
+  /// `getEntry` çağrısı `null` döner ve `_entry` de `null` olur; bu ekranın
+  /// zaten desteklediği "henüz kütüphanede değil" görünümüne düşer.
   Future<void> _removeFromLibrary() async {
     final entry = _entry;
     if (entry == null) return;

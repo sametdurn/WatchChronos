@@ -226,11 +226,42 @@ class WatchEntriesRepository {
     );
   }
 
-  /// Kütüphaneden kaldırır. Kaydı SİLMEZ — sadece `in_library = false`
-  /// yapar; böylece izlenen bölüm geçmişi (`episode_logs`), puan ve notlar
-  /// korunur. Kaldırılmış bir kayıt kütüphane listelerinde görünmez ama
-  /// Keşfet'ten girilen içerik detayında (`getEntry`) hâlâ erişilebilir.
+  /// Kütüphaneden kaldırır.
+  ///
+  /// - Dizi (`tv`) ise ve hiç bölüm izlenmemişse (`episode_logs`'ta hiç
+  ///   kaydı yoksa): kayıt veritabanından TAMAMEN SİLİNİR. Kaybedilecek bir
+  ///   izleme geçmişi olmadığı için kütüphanede "yarım kalmış, boş" bir
+  ///   dizi kaydı bırakmanın anlamı yok.
+  /// - Dizi olup en az bir bölüm izlenmişse, veya film ise: kayıt SİLİNMEZ
+  ///   — sadece `in_library = false` yapılır; böylece izlenen bölüm
+  ///   geçmişi (`episode_logs`), puan ve notlar korunur. Kaldırılmış bir
+  ///   kayıt kütüphane listelerinde görünmez ama Keşfet'ten girilen içerik
+  ///   detayında (`getEntry`) hâlâ erişilebilir, kütüphaneye tekrar
+  ///   eklenirse (bkz. [addToLibrary]) eski durumu geri gelir.
   Future<void> removeFromLibrary(String watchEntryId) async {
+    _requireUserId();
+    try {
+      final row = await _client
+          .from('watch_entries')
+          .select('id, media_type')
+          .eq('id', watchEntryId)
+          .single();
+
+      if (row['media_type'] == 'tv') {
+        final episodeLogs = await _client
+            .from('episode_logs')
+            .select('id')
+            .eq('watch_entry_id', watchEntryId)
+            .limit(1);
+        if (episodeLogs.isEmpty) {
+          await _client.from('watch_entries').delete().eq('id', watchEntryId);
+          return;
+        }
+      }
+    } on PostgrestException catch (e) {
+      throw WatchEntryErrorTranslator.fromPostgrestException(e);
+    }
+
     await _setInLibraryFlag(watchEntryId, false);
   }
 

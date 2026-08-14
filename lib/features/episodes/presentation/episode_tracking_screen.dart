@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/cache/models/cached_media.dart';
 import '../../../core/cache/models/cached_season.dart';
 import '../../../core/localization/app_localizations.dart';
 import '../../media/data/media_repository.dart';
+import '../../media/domain/tv_show_lifecycle.dart';
 import '../../watch_entries/data/models/media_type.dart';
 import '../../watch_entries/data/models/watch_entry.dart';
 import '../../watch_entries/data/models/watch_status.dart';
@@ -33,6 +35,7 @@ class _EpisodeTrackingScreenState extends ConsumerState<EpisodeTrackingScreen> {
   String? _initErrorKey;
 
   WatchEntry? _entry;
+  CachedMedia? _media;
   int _numberOfSeasons = 0;
   int _selectedSeason = 1;
 
@@ -87,6 +90,7 @@ class _EpisodeTrackingScreenState extends ConsumerState<EpisodeTrackingScreen> {
       if (!mounted) return;
       setState(() {
         _entry = entry;
+        _media = media;
         _numberOfSeasons = numberOfSeasons;
         _selectedSeason = startingSeason;
         _initializing = false;
@@ -191,6 +195,61 @@ class _EpisodeTrackingScreenState extends ConsumerState<EpisodeTrackingScreen> {
         ..showSnackBar(
           SnackBar(content: Text(context.l10n.t('episode_tracking_action_failed'))),
         );
+    }
+  }
+
+  /// Kullanıcı, dizinin bilinen son bölümüne (mevcut sezon/bölüm göstergesine
+  /// göre) ulaştığında çağrılır. Dizi final yapmış/iptal edilmişse (yeni
+  /// bölüm gelmeyecekse) VE tüm sezonların tüm bölümleri gerçekten izlendi
+  /// olarak işaretlenmişse, durumu otomatik olarak "Tamamlandı" yapar.
+  ///
+  /// `current_season`/`current_episode` göstergesi yalnızca EN SON
+  /// işaretlenen bölümü takip eder; kullanıcı önceki bölümleri atlamış
+  /// olabilir. Bu yüzden asıl karar, TMDB'nin toplam bölüm sayısıyla
+  /// veritabanındaki gerçek izlenmiş bölüm sayısının karşılaştırılmasına
+  /// dayanır — yalnızca göstericinin son bölüme gelmiş olması yeterli
+  /// sayılmaz.
+  ///
+  /// Dizi daha sonra geri çekilirse (TMDB status'ü tekrar "Returning
+  /// Series"/"In Production" olursa), `classifyTvEntry` (bkz.
+  /// tv_entry_classification.dart) zaten bunu "Diziler" sekmesine geri
+  /// döndürür; burada yazılan `WatchStatus.completed`, uygulamanın kalıcı
+  /// bir "isCompleted" bayrağı SAKLAMAMA prensibiyle çelişmez çünkü bu
+  /// alan zaten kullanıcının menüden elle "Tamamlandı" işaretlemesiyle de
+  /// aynı şekilde ayarlanabiliyor.
+  Future<void> _maybeAutoCompleteSeries(WatchEntry entry) async {
+    final media = _media;
+    if (media == null) return;
+    if (entry.status == WatchStatus.completed) return;
+
+    final lifecycle = parseTvShowLifecycle(media.status);
+    if (!lifecycle.isFinished) return;
+
+    final totalEpisodes = media.numberOfEpisodes;
+    if (totalEpisodes == null || totalEpisodes <= 0) return;
+
+    final watchEntriesRepository = ref.read(watchEntriesRepositoryProvider);
+    final int watchedTotal;
+    try {
+      watchedTotal = await watchEntriesRepository.watchedEpisodesTotalCount(
+        watchEntryId: entry.id,
+      );
+    } catch (_) {
+      return;
+    }
+    if (watchedTotal < totalEpisodes) return;
+
+    try {
+      final updated = await watchEntriesRepository.upsertStatus(
+        tmdbId: widget.tmdbId,
+        mediaType: MediaType.tv,
+        status: WatchStatus.completed,
+      );
+      if (!mounted) return;
+      setState(() => _entry = updated);
+    } catch (_) {
+      // Otomatik tamamlama başarısız olursa sessizce vazgeçilir; kullanıcı
+      // isterse durumu menüden elle "Tamamlandı" olarak işaretleyebilir.
     }
   }
 
@@ -338,7 +397,10 @@ class _EpisodeTrackingScreenState extends ConsumerState<EpisodeTrackingScreen> {
       episodesInCurrentSeason: episodesInCurrentSeason,
       totalSeasons: _numberOfSeasons,
     );
-    if (next == null) return;
+    if (next == null) {
+      await _maybeAutoCompleteSeries(updatedEntry);
+      return;
+    }
     if (!mounted) return;
 
     if (next.season == _selectedSeason) {
