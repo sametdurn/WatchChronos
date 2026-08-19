@@ -9,6 +9,7 @@ import '../../../core/utils/responsive_grid.dart';
 import '../../auth/presentation/utils/sign_out_confirmation.dart';
 import '../../media/data/media_repository.dart';
 import '../../media/domain/tv_entry_classification.dart';
+import '../../media/domain/upcoming_classification.dart';
 import '../../watch_entries/data/models/media_type.dart';
 import '../../watch_entries/data/models/watch_entry.dart';
 import '../../watch_entries/data/models/watch_status.dart';
@@ -39,7 +40,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 4, vsync: this);
+    _tabController = TabController(length: 5, vsync: this);
   }
 
   @override
@@ -74,6 +75,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
             Tab(text: context.l10n.t('library_tab_shows')),
             Tab(text: context.l10n.t('library_tab_movies')),
             Tab(text: context.l10n.t('library_tab_completed')),
+            Tab(text: context.l10n.t('library_tab_upcoming')),
             Tab(text: context.l10n.t('library_tab_favorites')),
           ],
         ),
@@ -84,6 +86,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
           _DizilerTab(),
           _FilmlerTab(),
           _TamamlandiTab(),
+          _YaklasanlarTab(),
           _FavoritesTab(),
         ],
       ),
@@ -156,6 +159,35 @@ Future<List<_TvContext>> _loadTvContext(
         media: mediaList[i],
         watchedCount: counts[entries[i].id] ?? 0,
         episodesInFinalSeason: finalSeasonCounts[i],
+      ),
+  ];
+}
+
+/// [_loadTvContext] ile aynı amaca hizmet eder ama filmler için: izlenen
+/// bölüm sayısı gibi diziye özgü alanlar filmlerde anlamsız olduğundan
+/// `watchedCount`/`episodesInFinalSeason` hep sabit değerlerle doldurulur.
+Future<List<_TvContext>> _loadMovieContext(
+  List<WatchEntry> entries,
+  MediaRepository mediaRepository, {
+  bool forceRefresh = false,
+}) async {
+  final mediaList = await Future.wait(
+    entries.map(
+      (entry) => mediaRepository.getMediaDetail(
+        tmdbId: entry.tmdbId,
+        mediaType: MediaType.movie,
+        forceRefresh: forceRefresh,
+      ),
+    ),
+  );
+
+  return [
+    for (var i = 0; i < entries.length; i++)
+      (
+        entry: entries[i],
+        media: mediaList[i],
+        watchedCount: 0,
+        episodesInFinalSeason: null,
       ),
   ];
 }
@@ -269,6 +301,11 @@ class _DizilerTabState extends ConsumerState<_DizilerTab> {
         final notStarted = <_TvContext>[];
 
         for (final tv in _tvContext!) {
+          // Henüz hiç bölümü yayınlanmamış diziler burada değil,
+          // Yaklaşanlar sekmesinde gösterilir. Çıkış tarihi geldiğinde bu
+          // kontrol artık `false` döner ve dizi otomatik olarak buraya
+          // (Henüz Başlanmadı grubuna) düşer.
+          if (isUnreleasedTv(tv.media)) continue;
           final section = classifyTvEntry(
             media: tv.media,
             entry: tv.entry,
@@ -424,8 +461,14 @@ class _FilmlerTabState extends ConsumerState<_FilmlerTab> {
             episodesInFinalSeason: null,
           ),
       ];
+      // Henüz vizyona girmemiş filmler burada değil, Yaklaşanlar
+      // sekmesinde gösterilir. Vizyon tarihi geldiğinde bu kontrol artık
+      // `false` döner ve film otomatik olarak buraya düşer.
+      final released = combined
+          .where((movie) => !isUnreleasedMovie(movie.media))
+          .toList();
       // En yeni yapım yılı en üstte: `releaseDate` olmayanlar en sona atılır.
-      combined.sort((a, b) {
+      released.sort((a, b) {
         final dateA = a.media.releaseDate;
         final dateB = b.media.releaseDate;
         if (dateA == null && dateB == null) return 0;
@@ -435,7 +478,7 @@ class _FilmlerTabState extends ConsumerState<_FilmlerTab> {
       });
       if (!mounted) return;
       _loadedSignature = signature;
-      setState(() => _movies = combined);
+      setState(() => _movies = released);
     } finally {
       _loading = false;
     }
@@ -514,6 +557,189 @@ class _FilmlerTabState extends ConsumerState<_FilmlerTab> {
             ),
           ),
         );
+  }
+}
+
+/// "Yaklaşanlar" sekmesi: kütüphaneye eklenmiş ama TMDB'de henüz hiç
+/// bölümü/vizyonu yayınlanmamış diziler ve filmler, ayrı başlıklar altında
+/// gösterilir. Bir yapımın çıkış tarihi geldiğinde ([isUnreleasedTv]/
+/// [isUnreleasedMovie] `false` döner) otomatik olarak buradan kalkar ve
+/// normal Diziler/Filmler sekmesinde görünmeye başlar — ayrıca bir "taşıma"
+/// işlemi yapılmaz, filtre her build'de tarihe göre yeniden hesaplanır.
+class _YaklasanlarTab extends ConsumerStatefulWidget {
+  const _YaklasanlarTab();
+
+  @override
+  ConsumerState<_YaklasanlarTab> createState() => _YaklasanlarTabState();
+}
+
+class _YaklasanlarTabState extends ConsumerState<_YaklasanlarTab> {
+  // Bilerek `_DizilerTab`/`_FilmlerTab`'daki gibi imza bazlı önbellekleme
+  // KULLANILMIYOR: buradaki sınıflandırma (bkz. isUnreleasedTv/Movie)
+  // saatin geçmesine bağlı olarak değişiyor, ama entry'lerin kendisi
+  // (status/updatedAt) çıkış tarihi geldiğinde değişmiyor. İmza bazlı bir
+  // önbellek bu durumda eskimiş sonucu sonsuza dek gösterip sadece uygulama
+  // yeniden başlatılınca düzelirdi. Bunun yerine `_TamamlandiTab` ile aynı
+  // desen kullanılır: sonuç her build'de taze hesaplanır, `_forceRefresh`
+  // ise sadece "aşağı çekip yenile" ile TMDB'den zorla tekrar çekmeyi
+  // tetiklemek için bir anahtardır.
+  bool _forceRefresh = false;
+
+  static const _tvStatuses = {WatchStatus.planned, WatchStatus.watching};
+
+  Future<void> _onRefresh(
+    List<WatchEntry> tvEntries,
+    List<WatchEntry> movieEntries,
+    MediaRepository mediaRepository,
+    WatchEntriesRepository repository,
+  ) async {
+    await Future.wait([
+      _loadTvContext(
+        tvEntries,
+        mediaRepository,
+        repository,
+        forceRefresh: true,
+      ),
+      _loadMovieContext(movieEntries, mediaRepository, forceRefresh: true),
+    ]);
+    if (mounted) setState(() => _forceRefresh = !_forceRefresh);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final repository = ref.watch(watchEntriesRepositoryProvider);
+    final mediaRepository = ref.watch(mediaRepositoryProvider);
+    final entriesAsync = ref.watch(libraryEntriesStreamProvider);
+
+    if (entriesAsync.isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (entriesAsync.hasError) {
+      return const _ErrorMessage();
+    }
+
+    final allEntries = entriesAsync.asData?.value ?? const <WatchEntry>[];
+    final tvEntries = allEntries
+        .where(
+          (e) => e.mediaType == MediaType.tv && _tvStatuses.contains(e.status),
+        )
+        .toList();
+    final movieEntries = allEntries
+        .where(
+          (e) =>
+              e.mediaType == MediaType.movie &&
+              e.status != WatchStatus.completed,
+        )
+        .toList();
+
+    Future<void> onRefresh() =>
+        _onRefresh(tvEntries, movieEntries, mediaRepository, repository);
+
+    return FutureBuilder<List<List<_TvContext>>>(
+      key: ValueKey(_forceRefresh),
+      future: Future.wait([
+        _loadTvContext(tvEntries, mediaRepository, repository),
+        _loadMovieContext(movieEntries, mediaRepository),
+      ]),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (snapshot.hasError || !snapshot.hasData) {
+          return const _ErrorMessage();
+        }
+
+        final upcomingTv =
+            snapshot.data![0].where((tv) => isUnreleasedTv(tv.media)).toList()
+              ..sort((a, b) {
+                // En yakın çıkış tarihi en üstte; tarihi belirsiz olanlar
+                // en sona.
+                final dateA = a.media.firstAirDate;
+                final dateB = b.media.firstAirDate;
+                if (dateA == null && dateB == null) return 0;
+                if (dateA == null) return 1;
+                if (dateB == null) return -1;
+                return dateA.compareTo(dateB);
+              });
+
+        final upcomingMovies =
+            snapshot.data![1]
+                .where((movie) => isUnreleasedMovie(movie.media))
+                .toList()
+              ..sort((a, b) {
+                final dateA = a.media.releaseDate;
+                final dateB = b.media.releaseDate;
+                if (dateA == null && dateB == null) return 0;
+                if (dateA == null) return 1;
+                if (dateB == null) return -1;
+                return dateA.compareTo(dateB);
+              });
+
+        if (upcomingTv.isEmpty && upcomingMovies.isEmpty) {
+          return RefreshIndicator(
+            onRefresh: onRefresh,
+            child: ListView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              children: [
+                _EmptyMessage(message: context.l10n.t('library_no_upcoming')),
+              ],
+            ),
+          );
+        }
+
+        return RefreshIndicator(
+          onRefresh: onRefresh,
+          child: ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            children: [
+              if (upcomingTv.isNotEmpty) ...[
+                _SectionHeader(
+                  title: context.l10n.t('library_upcoming_shows_title'),
+                ),
+                GridView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                  gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
+                    maxCrossAxisExtent: responsivePosterExtent(context),
+                    mainAxisSpacing: 12,
+                    crossAxisSpacing: 12,
+                    childAspectRatio: 2 / 3,
+                  ),
+                  itemCount: upcomingTv.length,
+                  itemBuilder: (context, index) => PosterGridTile(
+                    entry: upcomingTv[index].entry,
+                    media: upcomingTv[index].media,
+                  ),
+                ),
+              ],
+              if (upcomingMovies.isNotEmpty) ...[
+                _SectionHeader(
+                  title: context.l10n.t('library_upcoming_movies_title'),
+                ),
+                GridView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                  gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
+                    maxCrossAxisExtent: responsivePosterExtent(context),
+                    mainAxisSpacing: 12,
+                    crossAxisSpacing: 12,
+                    childAspectRatio: 2 / 3,
+                  ),
+                  itemCount: upcomingMovies.length,
+                  itemBuilder: (context, index) => PosterGridTile(
+                    entry: upcomingMovies[index].entry,
+                    media: upcomingMovies[index].media,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        );
+      },
+    );
   }
 }
 

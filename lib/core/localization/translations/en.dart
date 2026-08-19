@@ -325,6 +325,7 @@ final Map<String, String> enTranslations = {
   'library_tab_shows': 'Shows',
   'library_tab_movies': 'Movies',
   'library_tab_completed': 'Completed',
+  'library_tab_upcoming': 'Upcoming',
   'library_tab_favorites': 'Favorites',
   'library_no_shows': "You haven't added any shows yet. Search from Discover.",
   'library_no_ongoing_shows':
@@ -333,6 +334,9 @@ final Map<String, String> enTranslations = {
   'library_section_upcoming': 'Coming Up',
   'library_section_not_started': 'Not Started Yet',
   'library_no_movies': "You haven't added any movies yet. Search from Discover.",
+  'library_no_upcoming': "You don't have any unreleased shows or movies yet.",
+  'library_upcoming_shows_title': 'Upcoming Shows',
+  'library_upcoming_movies_title': 'Upcoming Movies',
   'library_no_completed': "You haven't completed anything yet.",
   'library_completed_shows_title': 'Completed Shows',
   'library_completed_movies_title': 'Completed Movies',
@@ -382,6 +386,7 @@ final Map<String, String> enTranslations = {
   // === common media type labels ===
   'common_media_type_movie': 'Movie',
   'common_media_type_show': 'Show',
+  'discover_upcoming_label': 'Coming Soon',
 
   // === episode tracking ===
   'episode_tracking_title': 'Episode Tracking',

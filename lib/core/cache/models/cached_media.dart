@@ -28,12 +28,14 @@ class CachedMedia {
   int? numberOfSeasons;
   int? numberOfEpisodes;
 
-  /// TMDB'nin dizi için döndürdüğü ham `status` alanı (örn. "Returning
-  /// Series", "Ended", "Canceled"...). Sadece dizilerde dolu olur. Bu alan
-  /// kalıcı bir "tamamlandı" bayrağı DEĞİLDİR — her medya yenilendiğinde
-  /// TMDB'den gelen güncel değerle üzerine yazılır. Hangi sekmede
-  /// gösterileceği her zaman bu alandan ANLIK olarak hesaplanır (bkz.
-  /// features/media/domain/tv_show_lifecycle.dart).
+  /// TMDB'nin döndürdüğü ham `status` alanı (dizide "Returning Series",
+  /// "Planned", "In Production", "Ended", "Canceled"...; filmde "Rumored",
+  /// "Planned", "In Production", "Post Production", "Released"...). Bu alan
+  /// kalıcı bir "tamamlandı"/"yayınlanmadı" bayrağı DEĞİLDİR — her medya
+  /// yenilendiğinde TMDB'den gelen güncel değerle üzerine yazılır. Hangi
+  /// sekmede gösterileceği her zaman bu alandan ANLIK olarak hesaplanır
+  /// (bkz. features/media/domain/tv_show_lifecycle.dart ve
+  /// features/media/domain/upcoming_classification.dart).
   String? status;
 
   List<String> genres = [];

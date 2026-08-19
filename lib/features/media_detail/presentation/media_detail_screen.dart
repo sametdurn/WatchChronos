@@ -11,6 +11,7 @@ import '../../../core/localization/app_localizations.dart';
 import '../../media/data/media_repository.dart';
 import '../../media/data/models/cast_member_model.dart';
 import '../../media/data/tmdb_repository.dart';
+import '../../media/domain/upcoming_classification.dart';
 import '../../watch_entries/data/models/media_type.dart';
 import '../../watch_entries/data/models/watch_entry.dart';
 import '../../watch_entries/data/models/watch_status.dart';
@@ -442,6 +443,26 @@ class _DetailBody extends StatelessWidget {
                             children: [
                               if (date != null)
                                 Text('${date.year}', style: theme.textTheme.bodyMedium),
+                              if (media.mediaType == MediaType.movie &&
+                                  media.runtimeMinutes != null &&
+                                  media.runtimeMinutes! > 0)
+                                Text(
+                                  context.l10n.tp('common_minutes_short', {
+                                    'count': '${media.runtimeMinutes}',
+                                  }),
+                                  style: theme.textTheme.bodyMedium,
+                                ),
+                              if (media.mediaType == MediaType.movie
+                                  ? isUnreleasedMovie(media)
+                                  : isUnreleasedTv(media))
+                                Chip(
+                                  label: Text(
+                                    context.l10n.t('discover_upcoming_label'),
+                                  ),
+                                  visualDensity: VisualDensity.compact,
+                                  backgroundColor:
+                                      theme.colorScheme.primaryContainer,
+                                ),
                               Chip(
                                 label: Text(
                                   media.mediaType == MediaType.movie
@@ -505,6 +526,21 @@ class _DetailBody extends StatelessWidget {
                 const SizedBox(height: 16),
                 if (media.overview != null && media.overview!.isNotEmpty)
                   Text(media.overview!, style: theme.textTheme.bodyLarge),
+                if (media.genres.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      for (final genre in media.genres)
+                        Chip(
+                          label: Text(genre),
+                          visualDensity: VisualDensity.compact,
+                          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                    ],
+                  ),
+                ],
                 const SizedBox(height: 24),
                 _LibrarySection(
                   media: media,
@@ -692,22 +728,29 @@ class _LibrarySection extends StatelessWidget {
 
     if (media.mediaType == MediaType.movie) {
       final watched = entry!.status == WatchStatus.completed;
+      final unreleased = isUnreleasedMovie(media);
       return Row(
         children: [
           Expanded(
-            child: FilledButton.icon(
-              onPressed: busy ? null : onToggleMovieWatched,
-              icon: Icon(
-                watched
-                    ? Icons.check_circle_rounded
-                    : Icons.check_circle_outline_rounded,
-              ),
-              label: Text(
-                watched
-                    ? context.l10n.t('media_detail_watched')
-                    : context.l10n.t('media_detail_mark_watched'),
-              ),
-            ),
+            child: unreleased
+                ? OutlinedButton.icon(
+                    onPressed: null,
+                    icon: const Icon(Icons.schedule_rounded),
+                    label: Text(context.l10n.t('discover_upcoming_label')),
+                  )
+                : FilledButton.icon(
+                    onPressed: busy ? null : onToggleMovieWatched,
+                    icon: Icon(
+                      watched
+                          ? Icons.check_circle_rounded
+                          : Icons.check_circle_outline_rounded,
+                    ),
+                    label: Text(
+                      watched
+                          ? context.l10n.t('media_detail_watched')
+                          : context.l10n.t('media_detail_mark_watched'),
+                    ),
+                  ),
           ),
           const SizedBox(width: 8),
           PopupMenuButton<_MovieMenuAction>(
@@ -725,6 +768,7 @@ class _LibrarySection extends StatelessWidget {
       );
     }
 
+    final unreleasedTv = isUnreleasedTv(media);
     return Row(
       children: [
         Chip(
@@ -734,19 +778,25 @@ class _LibrarySection extends StatelessWidget {
         ),
         const SizedBox(width: 8),
         Expanded(
-          child: OutlinedButton.icon(
-            onPressed: () async {
-              await context.push(
-                AppRoutes.episodeTracking(
-                  mediaType: media.mediaType.name,
-                  tmdbId: media.tmdbId,
+          child: unreleasedTv
+              ? OutlinedButton.icon(
+                  onPressed: null,
+                  icon: const Icon(Icons.schedule_rounded),
+                  label: Text(context.l10n.t('discover_upcoming_label')),
+                )
+              : OutlinedButton.icon(
+                  onPressed: () async {
+                    await context.push(
+                      AppRoutes.episodeTracking(
+                        mediaType: media.mediaType.name,
+                        tmdbId: media.tmdbId,
+                      ),
+                    );
+                    onEpisodesManaged();
+                  },
+                  icon: const Icon(Icons.checklist_rounded),
+                  label: Text(context.l10n.t('media_detail_manage_episodes')),
                 ),
-              );
-              onEpisodesManaged();
-            },
-            icon: const Icon(Icons.checklist_rounded),
-            label: Text(context.l10n.t('media_detail_manage_episodes')),
-          ),
         ),
         PopupMenuButton<_TvMenuAction>(
           onSelected: (action) {
@@ -763,10 +813,11 @@ class _LibrarySection extends StatelessWidget {
             }
           },
           itemBuilder: (context) => [
-            PopupMenuItem(
-              value: _TvMenuAction.markCompleted,
-              child: Text(context.l10n.t('media_detail_mark_completed')),
-            ),
+            if (!unreleasedTv)
+              PopupMenuItem(
+                value: _TvMenuAction.markCompleted,
+                child: Text(context.l10n.t('media_detail_mark_completed')),
+              ),
             PopupMenuItem(
               value: _TvMenuAction.markPlanned,
               child: Text(context.l10n.t('library_section_not_started')),

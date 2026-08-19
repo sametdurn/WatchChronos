@@ -23,6 +23,7 @@ class MediaSearchItem {
     required this.originalTitle,
     required this.posterPath,
     required this.year,
+    required this.isUpcoming,
     required this.voteAverage,
     required this.popularity,
   });
@@ -35,6 +36,7 @@ class MediaSearchItem {
       originalTitle: movie.originalTitle,
       posterPath: movie.posterPath,
       year: _yearFrom(movie.releaseDate),
+      isUpcoming: _isUpcoming(movie.releaseDate),
       voteAverage: movie.voteAverage,
       popularity: movie.popularity,
     );
@@ -48,6 +50,7 @@ class MediaSearchItem {
       originalTitle: tvShow.originalName,
       posterPath: tvShow.posterPath,
       year: _yearFrom(tvShow.firstAirDate),
+      isUpcoming: _isUpcoming(tvShow.firstAirDate),
       voteAverage: tvShow.voteAverage,
       popularity: tvShow.popularity,
     );
@@ -59,12 +62,23 @@ class MediaSearchItem {
   final String originalTitle;
   final String? posterPath;
   final String? year;
+
+  /// TMDB'nin verdiği çıkış/ilk yayın tarihi bugünden ileriyse (ya da bugün
+  /// ise) `true`. Tarih boş/bilinmiyorsa `false` döner — sadece kesin
+  /// bilinen gelecekteki bir tarih için "Yakında" gösterilir.
+  final bool isUpcoming;
   final double voteAverage;
   final double popularity;
 
   static String? _yearFrom(String date) {
     if (date.length < 4) return null;
     return date.substring(0, 4);
+  }
+
+  static bool _isUpcoming(String date) {
+    final parsed = DateTime.tryParse(date);
+    if (parsed == null) return true;
+    return !parsed.isBefore(DateTime.now());
   }
 }
 
@@ -129,6 +143,7 @@ class MediaSearchResultTile extends StatelessWidget {
               ? context.l10n.t('common_media_type_movie')
               : context.l10n.t('common_media_type_show'),
           if (item.year != null) item.year!,
+          if (item.isUpcoming) context.l10n.t('discover_upcoming_label'),
         ].join(' · '),
       ),
       trailing: item.voteAverage > 0

@@ -107,6 +107,7 @@ class MediaRepository {
       ..releaseDate = _parseDate(model.releaseDate)
       ..voteAverage = model.voteAverage
       ..runtimeMinutes = model.runtime
+      ..status = model.status.isEmpty ? null : model.status
       ..genres = model.genres.map((genre) => genre.name).toList()
       ..cachedAt = DateTime.now();
   }

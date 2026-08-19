@@ -315,6 +315,7 @@ final Map<String, String> trTranslations = {
   'library_tab_shows': 'Diziler',
   'library_tab_movies': 'Filmler',
   'library_tab_completed': 'Tamamlandı',
+  'library_tab_upcoming': 'Yaklaşanlar',
   'library_tab_favorites': 'Favoriler',
   'library_no_shows': 'Henüz bir dizi eklemedin. Keşfet sekmesinden ara.',
   'library_no_ongoing_shows':
@@ -323,6 +324,10 @@ final Map<String, String> trTranslations = {
   'library_section_upcoming': 'Devamı Gelecek',
   'library_section_not_started': 'Henüz Başlanmadı',
   'library_no_movies': 'Henüz bir film eklemedin. Keşfet sekmesinden ara.',
+  'library_no_upcoming':
+      'Henüz çıkmamış, takip ettiğin bir dizi ya da film yok.',
+  'library_upcoming_shows_title': 'Yaklaşan Diziler',
+  'library_upcoming_movies_title': 'Yaklaşan Filmler',
   'library_no_completed': 'Henüz tamamladığın bir şey yok.',
   'library_completed_shows_title': 'Tamamlanan Diziler',
   'library_completed_movies_title': 'Tamamlanan Filmler',
@@ -372,6 +377,7 @@ final Map<String, String> trTranslations = {
   // === common media type labels ===
   'common_media_type_movie': 'Film',
   'common_media_type_show': 'Dizi',
+  'discover_upcoming_label': 'Yakında',
 
   // === episode tracking ===
   'episode_tracking_title': 'Bölüm Takibi',
