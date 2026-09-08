@@ -6,6 +6,7 @@ import '../../../core/cache/models/cached_media.dart';
 import '../../../core/cache/models/cached_season.dart';
 import '../../../core/localization/app_localizations.dart';
 import '../../media/data/media_repository.dart';
+import '../../media/domain/aired_episodes.dart';
 import '../../media/domain/tv_show_lifecycle.dart';
 import '../../watch_entries/data/models/media_type.dart';
 import '../../watch_entries/data/models/watch_entry.dart';
@@ -375,19 +376,39 @@ class _EpisodeTrackingScreenState extends ConsumerState<EpisodeTrackingScreen> {
     final currentEpisode = updatedEntry.currentEpisode;
     if (currentSeason == null || currentEpisode == null) return;
 
+    final mediaRepository = ref.read(mediaRepositoryProvider);
+
     int episodesInCurrentSeason;
     if (currentSeason == _selectedSeason) {
-      episodesInCurrentSeason = seasonDetail.episodes.length;
+      episodesInCurrentSeason = airedEpisodeCount(seasonDetail);
     } else {
-      final mediaRepository = ref.read(mediaRepositoryProvider);
       try {
         final otherSeason = await mediaRepository.getSeasonDetail(
           tvId: widget.tmdbId,
           seasonNumber: currentSeason,
         );
-        episodesInCurrentSeason = otherSeason.episodes.length;
+        episodesInCurrentSeason = airedEpisodeCount(otherSeason);
       } catch (_) {
         return;
+      }
+    }
+
+    // TMDB, onaylanan bir sonraki sezonu bölümler yayınlanmadan ÖNCE sezon
+    // nesnesi olarak ekleyebildiğinden (bkz. `next_episode_calculator.dart`),
+    // sezon geçişinden önce o sezonun gerçekten başlayıp başlamadığı
+    // kontrol edilir; aksi halde "4. Sezon 1. Bölüm" gibi henüz çıkmamış
+    // bir bölüme otomatik geçilebilir.
+    int? episodesAiredInNextSeason;
+    if (currentEpisode >= episodesInCurrentSeason &&
+        currentSeason < _numberOfSeasons) {
+      try {
+        final nextSeason = await mediaRepository.getSeasonDetail(
+          tvId: widget.tmdbId,
+          seasonNumber: currentSeason + 1,
+        );
+        episodesAiredInNextSeason = airedEpisodeCount(nextSeason);
+      } catch (_) {
+        episodesAiredInNextSeason = null;
       }
     }
 
@@ -396,6 +417,7 @@ class _EpisodeTrackingScreenState extends ConsumerState<EpisodeTrackingScreen> {
       currentEpisode: currentEpisode,
       episodesInCurrentSeason: episodesInCurrentSeason,
       totalSeasons: _numberOfSeasons,
+      episodesAiredInNextSeason: episodesAiredInNextSeason,
     );
     if (next == null) {
       await _maybeAutoCompleteSeries(updatedEntry);

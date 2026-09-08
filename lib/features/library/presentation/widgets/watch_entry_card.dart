@@ -5,13 +5,14 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../app/router/app_routes.dart';
 import '../../../../core/cache/models/cached_media.dart';
-import '../../../../core/cache/models/cached_season.dart';
 import '../../../../core/config/env_config.dart';
 import '../../../../core/localization/app_localizations.dart';
 import '../../../episodes/utils/next_episode_calculator.dart';
 import '../../../media/data/media_repository.dart';
+import '../../../media/domain/aired_episodes.dart';
 import '../../../media/domain/tv_entry_classification.dart';
 import '../../../media/domain/tv_show_lifecycle.dart';
+import '../../../media/domain/tv_watch_progress.dart';
 import '../../../watch_entries/data/models/media_type.dart';
 import '../../../watch_entries/data/models/watch_entry.dart';
 import '../../../watch_entries/data/models/watch_status.dart';
@@ -237,10 +238,10 @@ class WatchEntryCard extends ConsumerWidget {
 /// izlenecek bölüm"ü DEĞİL. Bir sezonun son bölümü izlendiğinde bu ikisi
 /// farklılaşır: ör. 10 bölümlük 1. sezon bitince DB'de hâlâ "S1 • B10"
 /// yazar, oysa kullanıcıya "S2 • B1" gösterilmesi gerekir. Bu widget,
-/// [_NextEpisodeAction] ile aynı [computeNextEpisode] hesaplamasını
-/// kullanarak doğru olanı gösterir; sezon detayı için kullanılan
-/// [_seasonDetailProvider] ailesi zaten önbelleğe alındığından
-/// (aynı tvId/seasonNumber ile) ekstra bir ağ isteğine yol açmaz.
+/// [_NextEpisodeAction] ile aynı [_nextEpisodeProvider] hesaplamasını
+/// kullanarak doğru olanı gösterir; bu provider zaten önbelleğe
+/// alındığından (aynı tvId/sezon/bölüm ile) ekstra bir ağ isteğine yol
+/// açmaz.
 class _SeasonEpisodeLabel extends ConsumerWidget {
   const _SeasonEpisodeLabel({required this.entry, required this.media});
 
@@ -259,20 +260,19 @@ class _SeasonEpisodeLabel extends ConsumerWidget {
       return Text('S1 • B1', style: style);
     }
 
-    final seasonAsync = ref.watch(
-      _seasonDetailProvider((tvId: entry.tmdbId, seasonNumber: currentSeason)),
+    final nextAsync = ref.watch(
+      _nextEpisodeProvider((
+        tvId: entry.tmdbId,
+        currentSeason: currentSeason,
+        currentEpisode: currentEpisode,
+        totalSeasons: media.numberOfSeasons,
+      )),
     );
 
-    return seasonAsync.when(
-      data: (season) {
-        final next = computeNextEpisode(
-          currentSeason: currentSeason,
-          currentEpisode: currentEpisode,
-          episodesInCurrentSeason: season.episodes.length,
-          totalSeasons: media.numberOfSeasons ?? currentSeason,
-        );
-        // `next == null` -> dizinin tüm bölümleri izlenmiş; gösterilecek
-        // "sıradaki" bölüm yok, en son izlenen bölüm gösterilir.
+    return nextAsync.when(
+      data: (next) {
+        // `next == null` -> dizinin tüm (yayınlanmış) bölümleri izlenmiş;
+        // gösterilecek "sıradaki" bölüm yok, en son izlenen bölüm gösterilir.
         final displaySeason = next?.season ?? currentSeason;
         final displayEpisode = next?.episode ?? currentEpisode;
         return Text('S$displaySeason • B$displayEpisode', style: style);
@@ -293,7 +293,7 @@ class _SeasonEpisodeLabel extends ConsumerWidget {
 ///   dizi devam ediyor; "Devamı Gelecek" rozeti gösterilir.
 /// - [TvLibrarySection.completed]: final yapmış/iptal edilmiş VE tüm
 ///   bölümler izlenmiş; TMDB durumu rozet olarak gösterilir.
-class _TvBadge extends StatelessWidget {
+class _TvBadge extends ConsumerWidget {
   const _TvBadge({
     required this.entry,
     required this.media,
@@ -305,12 +305,31 @@ class _TvBadge extends StatelessWidget {
   final int watchedCount;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final reachedEndAsync = ref.watch(
+      _reachedEndOfAiredEpisodesProvider((
+        tvId: entry.tmdbId,
+        currentSeason: entry.currentSeason,
+        currentEpisode: entry.currentEpisode,
+        numberOfSeasons: media.numberOfSeasons,
+      )),
+    );
+
+    // Bilgi yüklenene kadar (ya da hata durumunda) eski/yedek davranışa
+    // (yalnızca toplam bölüm sayısı karşılaştırması) düşülür; bu sadece
+    // kısa bir an için yanlış rozet göstermemek amacıyla var, sonuç
+    // geldiğinde build tekrar tetiklenip doğru rozete geçilir.
+    final reachedEnd = reachedEndAsync.asData?.value ?? false;
+    return _buildBadge(context, reachedEnd);
+  }
+
+  Widget _buildBadge(BuildContext context, bool reachedEndOfAiredEpisodes) {
     final theme = Theme.of(context);
     final section = classifyTvEntry(
       media: media,
       entry: entry,
       watchedEpisodesCount: watchedCount,
+      reachedEndOfAiredEpisodes: reachedEndOfAiredEpisodes,
     );
 
     String? badgeLabel;
@@ -373,13 +392,13 @@ class _TrailingAction extends ConsumerWidget {
     return mediaAsync.when(
       data: (media) {
         if (watchedCount != null) {
-          return _buildForCount(media, watchedCount!);
+          return _buildForCount(ref, media, watchedCount!);
         }
         final watchedCountAsync = ref.watch(
           _watchedEpisodesCountProvider(entry.id),
         );
         return watchedCountAsync.when(
-          data: (count) => _buildForCount(media, count),
+          data: (count) => _buildForCount(ref, media, count),
           loading: () => const SizedBox.shrink(),
           error: (_, _) => const SizedBox.shrink(),
         );
@@ -389,11 +408,21 @@ class _TrailingAction extends ConsumerWidget {
     );
   }
 
-  Widget _buildForCount(CachedMedia media, int count) {
+  Widget _buildForCount(WidgetRef ref, CachedMedia media, int count) {
+    final reachedEndAsync = ref.watch(
+      _reachedEndOfAiredEpisodesProvider((
+        tvId: entry.tmdbId,
+        currentSeason: entry.currentSeason,
+        currentEpisode: entry.currentEpisode,
+        numberOfSeasons: media.numberOfSeasons,
+      )),
+    );
+    final reachedEnd = reachedEndAsync.asData?.value ?? false;
     final section = classifyTvEntry(
       media: media,
       entry: entry,
       watchedEpisodesCount: count,
+      reachedEndOfAiredEpisodes: reachedEnd,
     );
     final show =
         section == TvLibrarySection.notStarted ||
@@ -403,14 +432,72 @@ class _TrailingAction extends ConsumerWidget {
   }
 }
 
-typedef _SeasonKey = ({int tvId, int seasonNumber});
+typedef _NextEpisodeKey = ({
+  int tvId,
+  int currentSeason,
+  int currentEpisode,
+  int? totalSeasons,
+});
 
-final _seasonDetailProvider = FutureProvider.autoDispose
-    .family<CachedSeason, _SeasonKey>((ref, key) {
+/// [_SeasonEpisodeLabel] ve [_NextEpisodeAction] TARAFINDAN paylaşılan tek
+/// "sıradaki bölüm" hesaplaması. Mevcut sezonun *yayınlanmış* bölüm sayısını
+/// kullanır (bkz. `airedEpisodeCount`) ve sıradaki sezona geçmeden önce o
+/// sezonun gerçekten yayınlanıp yayınlanmadığını kontrol eder — TMDB,
+/// onaylanan bir sonraki sezonu bölümler çıkmadan önce sezon nesnesi olarak
+/// ekleyebildiğinden (bkz. `next_episode_calculator.dart`), sadece sezon
+/// sayısına bakmak henüz çıkmamış bir bölümü "sıradaki" gibi gösterebilir.
+final _nextEpisodeProvider = FutureProvider.autoDispose
+    .family<({int season, int episode})?, _NextEpisodeKey>((ref, key) async {
       final repository = ref.watch(mediaRepositoryProvider);
-      return repository.getSeasonDetail(
+      final currentSeasonDetail = await repository.getSeasonDetail(
         tvId: key.tvId,
-        seasonNumber: key.seasonNumber,
+        seasonNumber: key.currentSeason,
+      );
+      final airedInCurrent = airedEpisodeCount(currentSeasonDetail);
+      final totalSeasons = key.totalSeasons ?? key.currentSeason;
+
+      int? airedInNext;
+      if (key.currentEpisode >= airedInCurrent &&
+          key.currentSeason < totalSeasons) {
+        try {
+          final nextSeasonDetail = await repository.getSeasonDetail(
+            tvId: key.tvId,
+            seasonNumber: key.currentSeason + 1,
+          );
+          airedInNext = airedEpisodeCount(nextSeasonDetail);
+        } catch (_) {
+          airedInNext = null;
+        }
+      }
+
+      return computeNextEpisode(
+        currentSeason: key.currentSeason,
+        currentEpisode: key.currentEpisode,
+        episodesInCurrentSeason: airedInCurrent,
+        totalSeasons: totalSeasons,
+        episodesAiredInNextSeason: airedInNext,
+      );
+    });
+
+typedef _ReachedEndKey = ({
+  int tvId,
+  int? currentSeason,
+  int? currentEpisode,
+  int? numberOfSeasons,
+});
+
+/// [_TvBadge] ve [_TrailingAction] TARAFINDAN paylaşılan, kullanıcının
+/// dizinin fiilen yayınlanmış tüm bölümlerini izleyip izlemediği bilgisi
+/// (bkz. `hasReachedEndOfAiredTvEpisodes`).
+final _reachedEndOfAiredEpisodesProvider = FutureProvider.autoDispose
+    .family<bool, _ReachedEndKey>((ref, key) {
+      final repository = ref.watch(mediaRepositoryProvider);
+      return hasReachedEndOfAiredTvEpisodes(
+        tmdbId: key.tvId,
+        currentSeason: key.currentSeason,
+        currentEpisode: key.currentEpisode,
+        numberOfSeasons: key.numberOfSeasons,
+        mediaRepository: repository,
       );
     });
 
@@ -470,21 +557,17 @@ class _NextEpisodeActionState extends ConsumerState<_NextEpisodeAction>
       return _buildAction(context, season: 1, episode: 1);
     }
 
-    final seasonAsync = ref.watch(
-      _seasonDetailProvider((
+    final nextAsync = ref.watch(
+      _nextEpisodeProvider((
         tvId: entry.tmdbId,
-        seasonNumber: entry.currentSeason!,
+        currentSeason: entry.currentSeason!,
+        currentEpisode: entry.currentEpisode!,
+        totalSeasons: widget.media.numberOfSeasons,
       )),
     );
 
-    return seasonAsync.when(
-      data: (season) {
-        final next = computeNextEpisode(
-          currentSeason: entry.currentSeason!,
-          currentEpisode: entry.currentEpisode!,
-          episodesInCurrentSeason: season.episodes.length,
-          totalSeasons: widget.media.numberOfSeasons ?? entry.currentSeason!,
-        );
+    return nextAsync.when(
+      data: (next) {
         if (next == null) {
           return SizedBox(
             width: 56,

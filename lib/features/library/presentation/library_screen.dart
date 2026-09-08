@@ -9,6 +9,7 @@ import '../../../core/utils/responsive_grid.dart';
 import '../../auth/presentation/utils/sign_out_confirmation.dart';
 import '../../media/data/media_repository.dart';
 import '../../media/domain/tv_entry_classification.dart';
+import '../../media/domain/tv_watch_progress.dart';
 import '../../media/domain/upcoming_classification.dart';
 import '../../watch_entries/data/models/media_type.dart';
 import '../../watch_entries/data/models/watch_entry.dart';
@@ -95,15 +96,16 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
 }
 
 /// Bir dizi kaydını sınıflandırmak için gereken bağlamı (medya + izlenen
-/// bölüm sayısı) birlikte taşıyan yardımcı kayıt. `episodesInFinalSeason`,
-/// TMDB'nin son sezonundaki bölüm sayısıdır; `classifyTvEntry`'nin
+/// bölüm sayısı) birlikte taşıyan yardımcı kayıt. `reachedEndOfAiredEpisodes`,
+/// kullanıcının TMDB'de fiilen yayınlanmış tüm bölümleri izleyip izlemediğini
+/// ifade eder (bkz. `hasReachedEndOfAiredTvEpisodes`); `classifyTvEntry`'nin
 /// "Tüm bölümler izlendi" tespitini kart üzerindeki sıradaki-bölüm
 /// hesaplamasıyla tutarlı hâle getirmek için kullanılır.
 typedef _TvContext = ({
   WatchEntry entry,
   CachedMedia media,
   int watchedCount,
-  int? episodesInFinalSeason,
+  bool reachedEndOfAiredEpisodes,
 });
 
 /// Önceden her [WatchEntry] için `watchedEpisodesTotalCount` ayrı ayrı
@@ -132,24 +134,20 @@ Future<List<_TvContext>> _loadTvContext(
   final counts = await countsFuture;
   final mediaList = await mediaListFuture;
 
-  // Son sezonun bölüm sayısı, sadece kullanıcı zaten o sezonda olan
-  // dizilerde gerekli (bkz. classifyTvEntry); diğerlerinde gereksiz ağ
-  // isteği yapmamak için atlanır. Hata durumunda (ör. çevrimdışı) sessizce
-  // null'a düşülür, aggregate sayım yoluna geri dönülür.
-  final finalSeasonCounts = await Future.wait([
+  // Sadece kullanıcı zaten TMDB'nin bildirdiği son sezonda ya da onun bir
+  // gerisinde olan dizilerde gerekli (bkz. classifyTvEntry); diğerlerinde
+  // gereksiz ağ isteği yapmamak için atlanır. Hata durumunda (ör.
+  // çevrimdışı) sessizce false'a düşülür, aggregate sayım yoluna geri
+  // dönülür.
+  final reachedEndFlags = await Future.wait([
     for (var i = 0; i < entries.length; i++)
-      if (entries[i].currentSeason != null &&
-          mediaList[i].numberOfSeasons != null &&
-          entries[i].currentSeason == mediaList[i].numberOfSeasons)
-        mediaRepository
-            .getSeasonDetail(
-              tvId: entries[i].tmdbId,
-              seasonNumber: mediaList[i].numberOfSeasons!,
-            )
-            .then<int?>((season) => season.episodes.length)
-            .catchError((_) => null)
-      else
-        Future<int?>.value(null),
+      hasReachedEndOfAiredTvEpisodes(
+        tmdbId: entries[i].tmdbId,
+        currentSeason: entries[i].currentSeason,
+        currentEpisode: entries[i].currentEpisode,
+        numberOfSeasons: mediaList[i].numberOfSeasons,
+        mediaRepository: mediaRepository,
+      ),
   ]);
 
   return [
@@ -158,14 +156,14 @@ Future<List<_TvContext>> _loadTvContext(
         entry: entries[i],
         media: mediaList[i],
         watchedCount: counts[entries[i].id] ?? 0,
-        episodesInFinalSeason: finalSeasonCounts[i],
+        reachedEndOfAiredEpisodes: reachedEndFlags[i],
       ),
   ];
 }
 
 /// [_loadTvContext] ile aynı amaca hizmet eder ama filmler için: izlenen
 /// bölüm sayısı gibi diziye özgü alanlar filmlerde anlamsız olduğundan
-/// `watchedCount`/`episodesInFinalSeason` hep sabit değerlerle doldurulur.
+/// `watchedCount`/`reachedEndOfAiredEpisodes` hep sabit değerlerle doldurulur.
 Future<List<_TvContext>> _loadMovieContext(
   List<WatchEntry> entries,
   MediaRepository mediaRepository, {
@@ -187,7 +185,7 @@ Future<List<_TvContext>> _loadMovieContext(
         entry: entries[i],
         media: mediaList[i],
         watchedCount: 0,
-        episodesInFinalSeason: null,
+        reachedEndOfAiredEpisodes: false,
       ),
   ];
 }
@@ -310,7 +308,7 @@ class _DizilerTabState extends ConsumerState<_DizilerTab> {
             media: tv.media,
             entry: tv.entry,
             watchedEpisodesCount: tv.watchedCount,
-            episodesInFinalSeason: tv.episodesInFinalSeason,
+            reachedEndOfAiredEpisodes: tv.reachedEndOfAiredEpisodes,
           );
           switch (section) {
             case TvLibrarySection.watching:
@@ -458,7 +456,7 @@ class _FilmlerTabState extends ConsumerState<_FilmlerTab> {
             entry: entries[i],
             media: mediaList[i],
             watchedCount: 0,
-            episodesInFinalSeason: null,
+            reachedEndOfAiredEpisodes: false,
           ),
       ];
       // Henüz vizyona girmemiş filmler burada değil, Yaklaşanlar
@@ -828,7 +826,7 @@ class _TamamlandiTabState extends ConsumerState<_TamamlandiTab> {
                             media: tv.media,
                             entry: tv.entry,
                             watchedEpisodesCount: tv.watchedCount,
-                            episodesInFinalSeason: tv.episodesInFinalSeason,
+                            reachedEndOfAiredEpisodes: tv.reachedEndOfAiredEpisodes,
                           ) ==
                           TvLibrarySection.completed,
                     )

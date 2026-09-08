@@ -34,32 +34,29 @@ enum TvLibrarySection {
 ///
 /// ÖNEMLİ: `watchedEpisodesCount >= totalEpisodes` karşılaştırması TMDB'nin
 /// özel bölümleri (sezon 0) sayıma dahil edip etmemesi, sonradan eklenen/
-/// kaldırılan bölümler gibi nedenlerle bazen hiç tutmayabilir. Bu yüzden
-/// kart üzerindeki "sıradaki bölüm" hesaplamasıyla (bkz.
-/// `next_episode_calculator.dart`) AYNI tanımı burada da kullanıyoruz:
-/// kullanıcı son sezonun son bölümüne ulaştıysa da tamamlanmış sayılır.
-/// Böylece iki hesaplama birbiriyle çelişmez (bir dizi aynı anda hem
-/// "İzleniyor"da hem "Tamamlandı"da görünmez). Ayrıca kullanıcı diziyi
-/// (TV Time aktarımıyla ya da elle durum seçiciden) açıkça "Tamamlandı"
-/// olarak işaretlemişse de doğrudan tamamlanmış kabul edilir.
+/// kaldırılan bölümler gibi nedenlerle bazen hiç tutmayabilir. Ayrıca
+/// `totalEpisodes` (media.numberOfEpisodes), TMDB onaylanan bir sonraki
+/// sezonu bölümler yayınlanmadan ÖNCE sayıma katabildiği için de şişebilir.
+/// Bu yüzden [reachedEndOfAiredEpisodes] — çağıran tarafın, kullanıcının
+/// GERÇEKTEN YAYINLANMIŞ tüm bölümleri izleyip izlemediğini (bkz.
+/// `aired_episodes.dart` ve kart üzerindeki "sıradaki bölüm" hesaplamasıyla
+/// aynı tanım, `next_episode_calculator.dart`) hesaplayıp verdiği bayrak —
+/// asıl belirleyicidir; `totalEpisodes` karşılaştırması sadece bu bilgi
+/// hesaplanamadıysa (ör. çevrimdışı, ağ hatası) yedek olarak kullanılır.
+/// Ayrıca kullanıcı diziyi (TV Time aktarımıyla ya da elle durum
+/// seçiciden) açıkça "Tamamlandı" olarak işaretlemişse de doğrudan
+/// tamamlanmış kabul edilir.
 TvLibrarySection classifyTvEntry({
   required CachedMedia media,
   required WatchEntry entry,
   required int watchedEpisodesCount,
-  int? episodesInFinalSeason,
+  bool reachedEndOfAiredEpisodes = false,
 }) {
   final lifecycle = parseTvShowLifecycle(media.status);
   final totalEpisodes = media.numberOfEpisodes;
-  final reachedFinalSeasonEnd =
-      episodesInFinalSeason != null &&
-      episodesInFinalSeason > 0 &&
-      media.numberOfSeasons != null &&
-      entry.currentSeason == media.numberOfSeasons &&
-      entry.currentEpisode != null &&
-      entry.currentEpisode! >= episodesInFinalSeason;
   final fullyWatched =
       entry.status == WatchStatus.completed ||
-      reachedFinalSeasonEnd ||
+      reachedEndOfAiredEpisodes ||
       (totalEpisodes != null &&
           totalEpisodes > 0 &&
           watchedEpisodesCount >= totalEpisodes);

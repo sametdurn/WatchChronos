@@ -6,6 +6,7 @@ import '../../../core/localization/app_localizations.dart';
 import '../../../core/utils/responsive_grid.dart';
 import '../../media/data/media_repository.dart';
 import '../../media/domain/tv_entry_classification.dart';
+import '../../media/domain/tv_watch_progress.dart';
 import '../../watch_entries/data/models/media_type.dart';
 import '../../watch_entries/data/models/watch_entry.dart';
 import '../../watch_entries/data/models/watch_status.dart';
@@ -88,7 +89,7 @@ typedef _TvContext = ({
   WatchEntry entry,
   CachedMedia media,
   int watchedCount,
-  int? episodesInFinalSeason,
+  bool reachedEndOfAiredEpisodes,
 });
 
 class _CompletedTvGrid extends ConsumerWidget {
@@ -143,20 +144,15 @@ class _CompletedTvGrid extends ConsumerWidget {
             final counts = await countsFuture;
             final mediaList = await mediaListFuture;
 
-            final finalSeasonCounts = await Future.wait([
+            final reachedEndFlags = await Future.wait([
               for (var i = 0; i < entries.length; i++)
-                if (entries[i].currentSeason != null &&
-                    mediaList[i].numberOfSeasons != null &&
-                    entries[i].currentSeason == mediaList[i].numberOfSeasons)
-                  mediaRepository
-                      .getSeasonDetail(
-                        tvId: entries[i].tmdbId,
-                        seasonNumber: mediaList[i].numberOfSeasons!,
-                      )
-                      .then<int?>((season) => season.episodes.length)
-                      .catchError((_) => null)
-                else
-                  Future<int?>.value(null),
+                hasReachedEndOfAiredTvEpisodes(
+                  tmdbId: entries[i].tmdbId,
+                  currentSeason: entries[i].currentSeason,
+                  currentEpisode: entries[i].currentEpisode,
+                  numberOfSeasons: mediaList[i].numberOfSeasons,
+                  mediaRepository: mediaRepository,
+                ),
             ]);
 
             return [
@@ -165,7 +161,7 @@ class _CompletedTvGrid extends ConsumerWidget {
                   entry: entries[i],
                   media: mediaList[i],
                   watchedCount: counts[entries[i].id] ?? 0,
-                  episodesInFinalSeason: finalSeasonCounts[i],
+                  reachedEndOfAiredEpisodes: reachedEndFlags[i],
                 ),
             ];
           }(),
@@ -186,7 +182,7 @@ class _CompletedTvGrid extends ConsumerWidget {
                         media: tv.media,
                         entry: tv.entry,
                         watchedEpisodesCount: tv.watchedCount,
-                        episodesInFinalSeason: tv.episodesInFinalSeason,
+                        reachedEndOfAiredEpisodes: tv.reachedEndOfAiredEpisodes,
                       ) ==
                       TvLibrarySection.completed,
                 )
