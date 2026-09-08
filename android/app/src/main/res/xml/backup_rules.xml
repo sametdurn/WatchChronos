@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<full-backup-content>
+    <!-- flutter_secure_storage tarafından kullanılan SharedPreferences
+         kesinlikle backup'a dahil edilmez. -->
+    <exclude
+        domain="sharedpref"
+        path="." />
+</full-backup-content>
