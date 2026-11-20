@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/icon/icon.png" alt="WatchChronos Logo" width="160">
+</p>
+
 # WatchChronos
 
 Dizi ve film takip uygulaması. Flutter ile geliştirildi.
