@@ -2,10 +2,12 @@
   <img src="assets/icon/icon.png" alt="WatchChronos Logo" width="160">
 </p>
 
-# WatchChronos
+<h1 align="center">WatchChronos</h1>
 
-Dizi ve film takip uygulaması. Flutter ile geliştirildi.
-A TV show and movie tracking app built with Flutter.
+<p align="center">
+  Dizi ve film takip uygulaması. Flutter ile geliştirildi.<br>
+  A TV show and movie tracking app built with Flutter.
+</p>
 
 <p align="center">
   <a href="https://github.com/sametdurn/WatchChronos/releases">
